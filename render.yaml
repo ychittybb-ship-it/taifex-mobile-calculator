@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: taifex-auto-calculator
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn -w 1 -b 0.0.0.0:$PORT server:app
+    envVars:
+      - key: FUGLE_API_KEY
+        sync: false
