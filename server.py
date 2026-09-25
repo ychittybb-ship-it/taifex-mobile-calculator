@@ -7,14 +7,20 @@ import logging
 from flask import Flask, send_file, jsonify
 import websockets
 
+
 # =========================
-# 基本設定
+# Logging
 # =========================
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s"
 )
+
+
+# =========================
+# 基本設定
+# =========================
 
 KEY = os.getenv("FUGLE_API_KEY", "").strip()
 PORT = int(os.getenv("PORT", "8080"))
@@ -43,6 +49,7 @@ async def market_loop():
     while True:
 
         if not KEY:
+
             state["connected"] = False
             state["authenticated"] = False
             state["subscribed"] = False
@@ -70,9 +77,9 @@ async def market_loop():
 
                 logging.info("✅ WebSocket 已連線")
 
-                # -------------------------
+                # =====================
                 # API Key 驗證
-                # -------------------------
+                # =====================
 
                 auth_message = {
                     "event": "auth",
@@ -85,13 +92,16 @@ async def market_loop():
 
                 logging.info("🔑 已送出 API Key 驗證")
 
-                # -------------------------
-                # 持續接收 Fugle 訊息
-                # -------------------------
+                # =====================
+                # 接收 Fugle 訊息
+                # =====================
 
                 async for raw in ws:
 
-                    logging.info("📩 Fugle 回應：%s", raw[:1000])
+                    logging.info(
+                        "📩 Fugle 回應：%s",
+                        raw[:1000]
+                    )
 
                     try:
                         message = json.loads(raw)
@@ -111,7 +121,7 @@ async def market_loop():
                     data = message.get("data", {})
 
                     # =====================
-                    # API 驗證成功
+                    # 驗證成功
                     # =====================
 
                     if event == "authenticated":
@@ -123,9 +133,9 @@ async def market_loop():
                             "✅ Fugle API 驗證成功"
                         )
 
-                        # ---------------------
-                        # 訂閱台指期近月
-                        # ---------------------
+                        # =====================
+                        # 訂閱 TXF1!
+                        # =====================
 
                         subscribe_message = {
                             "event": "subscribe",
@@ -175,7 +185,7 @@ async def market_loop():
                         )
 
                     # =====================
-                    # 行情資料
+                    # 行情
                     # =====================
 
                     if isinstance(data, dict):
@@ -186,7 +196,6 @@ async def market_loop():
 
                             trade = trades[0]
 
-                            # 排除試用資料
                             if trade.get("isTrial", False):
                                 continue
 
@@ -227,11 +236,31 @@ async def market_loop():
 
 
 # =========================
+# 啟動 Fugle 背景連線
+# =========================
+#
+# 注意：
+# Render 使用 Gunicorn 啟動 server:app，
+# 所以不能放在 if __name__ == "__main__":
+#
+
+logging.info("🚀 啟動 Fugle 行情背景執行緒")
+
+market_thread = threading.Thread(
+    target=lambda: asyncio.run(market_loop()),
+    daemon=True
+)
+
+market_thread.start()
+
+
+# =========================
 # 網頁
 # =========================
 
 @app.get("/")
 def home():
+
     return send_file("index.html")
 
 
@@ -246,7 +275,7 @@ def quote():
 
 
 # =========================
-# 健康檢查
+# Health
 # =========================
 
 @app.get("/health")
@@ -263,15 +292,10 @@ def health():
 
 
 # =========================
-# 啟動
+# 本機啟動
 # =========================
 
 if __name__ == "__main__":
-
-    threading.Thread(
-        target=lambda: asyncio.run(market_loop()),
-        daemon=True
-    ).start()
 
     app.run(
         host="0.0.0.0",
